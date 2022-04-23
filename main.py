@@ -34,7 +34,8 @@ parser.add_argument('--flipFrame', help='Flip orientation of camera', required=F
 # Global variable definitions
 args = parser.parse_args() 
 video_frame = None
-thread_lock = threading.Lock()
+capture_thread_lock = threading.Lock()
+encode_thread_lock = threading.Lock()
 last_detection_time = datetime.now()
 
 # Open and configure camera source
@@ -49,14 +50,14 @@ app = Flask(__name__)
 
 # Read frames from camera source and store globally
 def captureFrames():
-    global video_frame, thread_lock
+    global video_frame, capture_thread_lock
     counter = 0
     fps = 0
     start_time = time.time()
 
     while True and video_capture.isOpened():
         counter += 1
-        with thread_lock:
+        with capture_thread_lock:
 
             # Read Frames
             return_key, frame = video_capture.read()
@@ -153,9 +154,9 @@ def detectObject():
 
 
 def encodeFrames():
-    global thread_lock
+    global encode_thread_lock
     while True:
-        with thread_lock:
+        with encode_thread_lock:
             global video_frame
             if video_frame is None:
                 continue
@@ -166,9 +167,9 @@ def encodeFrames():
         yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n') # Output image as a byte array
 
 
-@app.route('/')  
-def index():  
-    return send_from_directory(app.static_folder, 'index.html')
+#@app.route('/')  
+#def index():  
+#    return send_from_directory(app.static_folder, 'index.html')
 
 #@app.route('/<path:filename>')  
 #def send_file(filename):  
