@@ -1,28 +1,25 @@
-# Jetson Camera
+# BirdCam
 
-[![jetson-camera](resources/images/banner.png)](https://www.eff.org/deeplinks/2020/02/what-know-you-buy-or-install-your-amazon-ring-camera)
+[![birdcam](resources/images/banner.jpg)](https://github.com/bsord/birdcam)
 
-### Ring cameras suck, so I'ma make my own
+### DIY and open source bird watcher
 
-[What's wrong with Ring cameras?](https://www.eff.org/deeplinks/2020/02/what-know-you-buy-or-install-your-amazon-ring-camera)
+BirdCam runs on Raspberry Pi and uses a webcam or directly attached CSI camera to detect, photograph, and identify birds.
 
 <hr>
 
 #### Features
 
 - Web Streaming
-- Face/Torso/Person Detection
+- Bird Detection
+- Bird identification and classification (coming soon)
 - Slack Notifications
-- PTZ Tracking Support
 
 #### Getting Started
 
 - [Recommended Hardware](resources/documentation/HARDWARE.md)
-- [Servo Wiring](resources/documentation/WIRING.md)
 - [Initial Setup & Usage](resources/documentation/USAGE.md)
 - [Configuration Options](resources/documentation/CONFIGURATION.md)
-- [Troubleshooting](resources/documentation/TROUBLESHOOTING.md)
-- [Additional Resources](resources/documentation/RESOURCES.md)
 - [To-Do List](resources/documentation/TODO.md)
 
 #### Contributing

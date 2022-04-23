@@ -8,7 +8,7 @@ slack_user_name = 'Jetson Cam'
 def post_message_to_slack(text, args, blocks = None):
     return requests.post('https://slack.com/api/chat.postMessage', {
         'token': args.slack_token,
-        'channel': slack_channel,
+        'channel': args.slack_channel,
         'text': text,
         'icon_url': slack_icon_url,
         'username': slack_user_name,
@@ -23,7 +23,7 @@ def post_file_to_slack(
       {
         'token': args.slack_token,
         'filename': file_name,
-        'channels': slack_channel,
+        'channels': args.slack_channel,
         'filetype': file_type,
         'initial_comment': text,
         'title': title

@@ -2,15 +2,19 @@
 
 Install prerequisites:
 
-`pip3 install opencv-python flask imutils adafruit-circuitpython-servokit`
+`pip3 install -r requirements.txt`
 
 
 Basic start-up:
 
-`python3 Jetson/jetson-cam/main.py`
+`python3 main.py`
 
 
 Advanced start-up:
 
-`python3 Jetson/jetson-cam/main.py --slack-token <MY SLACK TOKEN> --ptz-test --debug`
+`python3 main.py --port 8000 --debug --slack-token=[SLACKTOKEN] --slack-channel='#birdcam' --detection-delay=10 `
+
+View Live feed:
+
+Open browser to http://localhost:8000
 

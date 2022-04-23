@@ -1,145 +1,157 @@
 import argparse
 import cv2
-from datetime import datetime
+from datetime import datetime, timedelta
 from notifications import post_message_to_slack
 from notifications import post_file_to_slack
+from object_detector import ObjectDetector
+from object_detector import ObjectDetectorOptions
+import utils
 import os
 import time
 import threading
 from flask import Response, Flask
 
-__version__ = "1.0.5"
+__version__ = "1.0.0"
 
-parser = argparse.ArgumentParser(description="Ring cameras suck, so I'ma make my own")
+# Arugment handling
+parser = argparse.ArgumentParser(description="Raspberry Pi based camera monitor for detecting and classifying birds with notification support", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--debug", help="Increase output verbosity", action="store_true")
-parser.add_argument("-v", "--version", help="Current Jetson Camera version.", action="store_true")
+parser.add_argument("-v", "--version", help="Current Birdcam version.", action="store_true")
 parser.add_argument("--slack-token", help="Slack bot token to be used for notifications")
-parser.add_argument("--notification-delay", help="Interval in seconds between notifications", default=60)
-parser.add_argument("--disable-motion", help="Disable motion detection", action="store_true")
-parser.add_argument("--ptz-test", help="Verify PTZ functionality and range", action="store_true")
-parser.add_argument("--port", help="Web Port", default=8000)
-parser.add_argument("--save", help="Archive detected motion", action="store_true")
+parser.add_argument("--slack-channel", help="Slack channel to be used for notifications")
+parser.add_argument("--detection-delay", help="Interval in seconds between detections", required=False, type=int, default=60)
+parser.add_argument("--disable-detection", help="Disable object detection", action="store_true")
+parser.add_argument("--port", help="Web Port", default=8000, type=int)
+parser.add_argument("--save", help="Archive detected objects", action="store_true")
+
+parser.add_argument('--model', help='Path of the object detection model.', required=False, default='efficientdet_lite0.tflite')
+parser.add_argument('--cameraId', help='Id of camera.', required=False, type=int, default=0)
+parser.add_argument('--frameWidth', help='Width of frame to capture from camera.', required=False, type=int, default=1280)
+parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, type=int, default=720)
+parser.add_argument('--numThreads', help='Number of CPU threads to run the model.', required=False, type=int, default=1)
+
+# Global variable definitions
 args = parser.parse_args() 
-
-global video_frame
 video_frame = None
-
-global thread_lock 
 thread_lock = threading.Lock()
+last_detection_time = datetime.now()
 
-global last_notify_time
-last_notify_time = datetime.now()
+# Open and configure camera source
+video_capture = cv2.VideoCapture(args.cameraId)
+video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, args.frameWidth)
+video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, args.frameHeight)
+#video_capture.set(cv2.CAP_PROP_AUTO_EXPOSURE, .75) # Disable auto exposure
+#video_capture.set(cv2.CAP_PROP_EXPOSURE, 30) # Set exposure
 
-global last_detected_location 
-
-HAAR_CASCADE_XML_FILE = "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
-#HAAR_CASCADE_XML_FILE = "/usr/share/opencv4/haarcascades/haarcascade_upperbody.xml"
-#HAAR_CASCADE_XML_FILE = "/usr/share/opencv4/haarcascades/haarcascade_fullbody.xml"
-
-GSTREAMER_PIPELINE = 'nvarguscamerasrc ! video/x-raw(memory:NVMM), width=3264, height=1848, format=(string)NV12, framerate=28/1 ! nvvidconv flip-method=2 ! video/x-raw, width=1680, height=1050, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink wait-on-eos=false max-buffers=1 drop=True'
-
+# Define flask
 app = Flask(__name__)
 
+# Read frames from camera source and store globally
 def captureFrames():
     global video_frame, thread_lock
-    video_capture = cv2.VideoCapture(GSTREAMER_PIPELINE, cv2.CAP_GSTREAMER)
+    counter = 0
+    fps = 0
+    start_time = time.time()
+
     while True and video_capture.isOpened():
-        return_key, frame = video_capture.read()
-        if not return_key:
-            break
-
+        counter += 1
         with thread_lock:
-            video_frame = frame.copy()
+
+            # Read Frames
+            return_key, frame = video_capture.read()
+            if not return_key:
+                break
+
+            # Flip Frame
+            frame = cv2.flip(frame, 0)
+
             if args.debug:
-                # Draw a dot center screen
-                center_coordinates = (840, 525)
-                radius = 5
-                center_color = (0, 255, 0)
-                detected_color = (255, 0, 0)
-                thickness = -1
-                cv2.circle(video_frame, center_coordinates, radius, center_color, thickness)
+                # Calculate the FPS
+                fps_avg_frame_count = 10
+                if counter % fps_avg_frame_count == 0:
+                    end_time = time.time()
+                    fps = fps_avg_frame_count / (end_time - start_time)
+                    start_time = time.time()
 
-        key = cv2.waitKey(30) & 0xff
-        if key == 27:
-            break
+                # Show the FPS
+                fps_text = 'FPS = {:.1f}'.format(fps)
+                text_location = (24, 20)
+                cv2.putText(frame, fps_text, text_location, cv2.FONT_HERSHEY_PLAIN,
+                    1, (0, 0, 255), 1)
 
+            # Save frame to global variable
+            video_frame = frame.copy()
+
+    # release video stream        
     video_capture.release()
 
-def detectMotion():
-    global video_frame, last_notify_time, last_detected_location
-    cascade = cv2.CascadeClassifier(HAAR_CASCADE_XML_FILE)
+
+# Detect objects in frame and notify
+def detectObject():
+    global video_frame, last_detection_time
+
+    # Initialize the object detection model
+    options = ObjectDetectorOptions(
+        num_threads=args.numThreads,
+        score_threshold=0.6,
+        max_results=10,
+        label_allow_list=["bird","person"])
+    detector = ObjectDetector(model_path=args.model, options=options)
+
     while True:
         global video_frame
-
         if video_frame is None:
             continue
 
-        grayscale_image = cv2.cvtColor(video_frame, cv2.COLOR_BGR2GRAY)
-        detected = cascade.detectMultiScale(grayscale_image, 1.3, 5)
+        # Check if detection should run
+        seconds_since_notified = (datetime.now() - last_detection_time).total_seconds()
+        if (seconds_since_notified > args.detection_delay):
 
-        # Figure out the timestamp
-        date = datetime.now().strftime("%m/%d/%Y")
-        time = datetime.now().strftime("%H:%M:%S")
-        
-        # There's a person in the image
-        for (x_pos, y_pos, width, height) in detected:
-            someone_here = True
-            if args.debug:
-                detection_center = (int(x_pos + width / 2), int(y_pos + height / 2))
-                print(f"[{time}] Motion Detected @ {detection_center}")
-                last_detected_location = detection_center
-                radius = 10
-                color = (0, 0, 255)
-                thickness = 2
-                with thread_lock:
-                    cv2.circle(video_frame, detection_center, radius, color, thickness)
+            # Run object detection estimation using the model.
+            detections = detector.detect(video_frame)
 
-            # Move to the detection
-            center_coordinates = (840, 525)
-            move_x = int(center_coordinates[0] - last_detected_location[0])
-            move_y = int(center_coordinates[1] - last_detected_location[1])
-            move_coordinates = (move_x, move_y)
-            print(f"Camera is pointed at {center_coordinates} but needs to be pointed at {last_detected_location}.")
-            print(f"The camera needs moved: {move_coordinates}.")
-            if args.track:
-                pan(move_x)
-                tilt(move_y)
+            if len(detections) > 0: 
+                # Reset last detection timestamp
+                last_detection_time = datetime.now()
+                
+                # Iterate detections
+                for detection in detections:
 
-            # Save the image           
-            if args.save:
-                filename = 'motion-{}.jpg'.format(datetime.now().strftime("%m%d%Y%H%M%S"))
-                cv2.imwrite(filename, video_frame)
-                cv2.waitKey(0)
+                    # Get all labels/categories
+                    categories = detection.categories
+                    for category in categories:
+                        if args.debug:
+                            print(category.label)
 
-            # If there's a Slack token, send a message
-            if args.slack_token:
-                seconds_since_notified = (datetime.now() - last_notify_time).total_seconds()
-                if (seconds_since_notified > args.notification_delay):
-                    try:
-                        with open(filename, "rb") as image:
-                            file = image.read()
-                            data = bytearray(file)
-
-                        post_file_to_slack(
-                            ':warning: Motion was detected on the Jetson Camera :warning:',
-                            args,
-                            filename,
-                            data)
-                        
-                        last_notify_time = datetime.now()
-                        print(f"Successfully posted notification to Slack: {last_notify_time}")
-                    except Exception as e:
-                        print(f"Failed to post a notification message: {e}" )
-                        continue
-                else:
+                    # Draw detection bounding boxes
                     if args.debug:
-                        print(f"Skipping notification for {args.notification_delay} seconds, we just sent one {seconds_since_notified} seconds ago...")
-        else:
-            someone_here = False
-            if args.debug:
-                print(f"[{time}] ...............")
+                        video_frame = utils.visualize(video_frame, detections)
 
-def encodeFrame():
+                    # Save the image           
+                    if args.save:
+                        filename = 'motion-{}.jpg'.format(datetime.now().strftime("%m%d%Y%H%M%S"))
+                        cv2.imwrite(filename, video_frame)
+                        cv2.waitKey(0)
+
+                    # Send notification
+                    if args.slack_token and args.slack_channel:
+                        return_key, encoded_image = cv2.imencode(".jpg", video_frame)
+                        if not return_key:
+                            continue
+                        try:
+                            post_file_to_slack(
+                                'Object detected',
+                                args,
+                                'motion-{}.jpg'.format(datetime.now().strftime("%m%d%Y%H%M%S")),
+                                bytearray(encoded_image))
+                            print(f"Successfully posted notification to Slack")
+
+                        except Exception as e:
+                            print(f"Failed to post a notification message: {e}" )
+                            continue
+
+
+def encodeFrames():
     global thread_lock
     while True:
         with thread_lock:
@@ -152,9 +164,11 @@ def encodeFrame():
 
         yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n') # Output image as a byte array
 
+
 @app.route("/")
 def streamFrames():
-    return Response(encodeFrame(), mimetype = "multipart/x-mixed-replace; boundary=frame")
+    return Response(encodeFrames(), mimetype = "multipart/x-mixed-replace; boundary=frame")
+
 
 if __name__ == '__main__':
     if args.version:
@@ -166,29 +180,23 @@ if __name__ == '__main__':
     if args.debug:
         print("\n** Debug Mode: ENABLED **")
 
-    if args.ptz_test:
-        print("\n** PTZ Test: ENABLED **\n")
+    if args.disable_detection:
+        print("\n** Object Detection: DISABLED **")
 
     try:
-        if args.ptz_test:
-            from pantilt import ptz_demo
-            ptz_thread = threading.Thread(target=ptz_demo)
-            ptz_thread.daemon = True
-            ptz_thread.start()
-
         process_thread = threading.Thread(target=captureFrames)
         process_thread.daemon = True
-
-        detect_thread = threading.Thread(target=detectMotion)
-        detect_thread.daemon = True
-
         process_thread.start()
-        detect_thread.start()
+
+        if not args.disable_detection:
+            detect_thread = threading.Thread(target=detectObject)
+            detect_thread.daemon = True
+            detect_thread.start()
 
         app.run("0.0.0.0", port=args.port)
+        
     except KeyboardInterrupt:
         try:
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-
