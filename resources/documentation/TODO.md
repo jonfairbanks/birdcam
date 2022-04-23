@@ -6,3 +6,4 @@
 - [x] Add html template to web server
 - [ ] Implement docker or auto run script on boot
 - [ ] Build a proper 3d models for cases/mounts
+- [ ] Capture video/gif on object detection
