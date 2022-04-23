@@ -29,6 +29,7 @@ parser.add_argument('--cameraId', help='Id of camera.', required=False, type=int
 parser.add_argument('--frameWidth', help='Width of frame to capture from camera.', required=False, type=int, default=1280)
 parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, type=int, default=720)
 parser.add_argument('--numThreads', help='Number of CPU threads to run the model.', required=False, type=int, default=1)
+parser.add_argument('--flipFrame', help='Flip orientation of camera', required=False, type=int, default=0)
 
 # Global variable definitions
 args = parser.parse_args() 
@@ -63,7 +64,7 @@ def captureFrames():
                 break
 
             # Flip Frame
-            frame = cv2.flip(frame, 0)
+            frame = cv2.flip(frame, args.flipFrame)
 
             if args.debug:
                 # Calculate the FPS

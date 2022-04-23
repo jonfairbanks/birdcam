@@ -37,3 +37,11 @@ Video stream only. Can be used if you do not want motion detection enabled.
 The web stream runs on port 8000 by default but can be overridden if necessary.
 
 <hr>
+
+#### Rotating camera view
+
+`python3 main.py --flipFrame 1`
+
+Valid values are -2, -1, 0, 1, 2
+
+<hr>
