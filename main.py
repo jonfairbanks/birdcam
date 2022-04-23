@@ -34,8 +34,7 @@ parser.add_argument('--flipFrame', help='Flip orientation of camera', required=F
 # Global variable definitions
 args = parser.parse_args() 
 video_frame = None
-capture_thread_lock = threading.Lock()
-encode_thread_lock = threading.Lock()
+
 last_detection_time = datetime.now()
 
 # Open and configure camera source
@@ -50,7 +49,8 @@ app = Flask(__name__)
 
 # Read frames from camera source and store globally
 def captureFrames():
-    global video_frame, capture_thread_lock
+    global video_frame
+    capture_thread_lock = threading.Lock()
     counter = 0
     fps = 0
     start_time = time.time()
@@ -108,6 +108,10 @@ def detectObject():
         # Run object detection estimation using the model.   
         detections = detector.detect(video_frame)
 
+        # Draw detection bounding boxes
+        if args.debug:
+            video_frame = utils.visualize(video_frame, detections)
+
         # Check if detection should run
         seconds_since_notified = (datetime.now() - last_detection_time).total_seconds()
         if (seconds_since_notified > args.detection_delay):
@@ -124,10 +128,6 @@ def detectObject():
                     for category in categories:
                         if args.debug:
                             print(category.label)
-
-                    # Draw detection bounding boxes
-                    if args.debug:
-                        video_frame = utils.visualize(video_frame, detections)
 
                     # Save the image           
                     if args.save:
@@ -154,7 +154,7 @@ def detectObject():
 
 
 def encodeFrames():
-    global encode_thread_lock
+    encode_thread_lock = threading.Lock()
     while True:
         with encode_thread_lock:
             global video_frame
