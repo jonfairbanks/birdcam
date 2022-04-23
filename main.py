@@ -104,15 +104,13 @@ def detectObject():
         global video_frame
         if video_frame is None:
             continue
-            
+
+        # Run object detection estimation using the model.   
         detections = detector.detect(video_frame)
 
         # Check if detection should run
         seconds_since_notified = (datetime.now() - last_detection_time).total_seconds()
         if (seconds_since_notified > args.detection_delay):
-
-            # Run object detection estimation using the model.
-            
 
             if len(detections) > 0: 
                 # Reset last detection timestamp
