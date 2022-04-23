@@ -104,13 +104,15 @@ def detectObject():
         global video_frame
         if video_frame is None:
             continue
+            
+        detections = detector.detect(video_frame)
 
         # Check if detection should run
         seconds_since_notified = (datetime.now() - last_detection_time).total_seconds()
         if (seconds_since_notified > args.detection_delay):
 
             # Run object detection estimation using the model.
-            detections = detector.detect(video_frame)
+            
 
             if len(detections) > 0: 
                 # Reset last detection timestamp
@@ -167,9 +169,9 @@ def encodeFrames():
         yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n') # Output image as a byte array
 
 
-#@app.route('/')  
-#def index():  
-#    return send_from_directory(app.static_folder, 'index.html')
+@app.route('/')  
+def index():  
+    return send_from_directory(app.static_folder, 'index.html')
 
 #@app.route('/<path:filename>')  
 #def send_file(filename):  
