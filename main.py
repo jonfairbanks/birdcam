@@ -9,7 +9,7 @@ import utils
 import os
 import time
 import threading
-from flask import Response, Flask
+from flask import Response, Flask, send_from_directory
 
 __version__ = "1.0.0"
 
@@ -165,7 +165,15 @@ def encodeFrames():
         yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n') # Output image as a byte array
 
 
-@app.route("/")
+@app.route('/')  
+def index():  
+    return send_from_directory(app.static_folder, 'index.html')
+
+#@app.route('/<path:filename>')  
+#def send_file(filename):  
+#    return send_from_directory(app.static_folder, filename)
+
+@app.route("/live")
 def streamFrames():
     return Response(encodeFrames(), mimetype = "multipart/x-mixed-replace; boundary=frame")
 
