@@ -3,3 +3,4 @@
 - [ ] Classify Birds
 - [ ] Expose image flip via command line argument
 - [ ] Expose camera source selection via command line argument
+- [ ] Add html template to web server
