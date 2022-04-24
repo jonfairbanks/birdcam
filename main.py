@@ -10,6 +10,7 @@ import os
 import time
 import threading
 from flask import Response, Flask, send_from_directory
+import imageio
 
 __version__ = "1.0.0"
 
@@ -33,7 +34,7 @@ parser.add_argument('--flipFrame', help='Flip orientation of camera', required=F
 
 # Global variable definitions
 args = parser.parse_args() 
-video_frame = None
+video_frames = [None] * 10 # initialize array of empty frames
 
 last_detection_time = datetime.now()
 
@@ -41,6 +42,7 @@ last_detection_time = datetime.now()
 video_capture = cv2.VideoCapture(args.cameraId)
 video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, args.frameWidth)
 video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, args.frameHeight)
+video_capture.set(cv2.CAP_PROP_FPS, 15)
 #video_capture.set(cv2.CAP_PROP_AUTO_EXPOSURE, .75) # Disable auto exposure
 #video_capture.set(cv2.CAP_PROP_EXPOSURE, 30) # Set exposure
 
@@ -49,7 +51,7 @@ app = Flask(__name__)
 
 # Read frames from camera source and store globally
 def captureFrames():
-    global video_frame
+    global video_frames
     capture_thread_lock = threading.Lock()
     counter = 0
     fps = 0
@@ -82,7 +84,10 @@ def captureFrames():
                     1, (0, 0, 255), 1)
 
             # Save frame to global variable
-            video_frame = frame.copy()
+            video_frames.insert(0,frame.copy())
+
+            # Truncate frames (insert + truncate probably needs to be improved)
+            video_frames = video_frames[0:90]
 
     # release video stream        
     video_capture.release()
@@ -90,7 +95,7 @@ def captureFrames():
 
 # Detect objects in frame and notify
 def detectObject():
-    global video_frame, last_detection_time
+    global video_frames, last_detection_time
 
     # Initialize the object detection model
     options = ObjectDetectorOptions(
@@ -101,22 +106,32 @@ def detectObject():
     detector = ObjectDetector(model_path=args.model, options=options)
 
     while True:
-        global video_frame
-        if video_frame is None:
+        global video_frames
+        if video_frames[0] is None:
             continue
 
         # Run object detection estimation using the model.   
-        detections = detector.detect(video_frame)
+        detections = detector.detect(video_frames[0])
 
         # Draw detection bounding boxes
         if args.debug:
-            video_frame = utils.visualize(video_frame, detections)
+            video_frames[0] = utils.visualize(video_frames[0], detections)
 
         # Check if detection should run
         seconds_since_notified = (datetime.now() - last_detection_time).total_seconds()
         if (seconds_since_notified > args.detection_delay):
 
-            if len(detections) > 0: 
+            if len(detections) > 0:
+                recording = True
+                start_recording_time = datetime.now()
+                
+                while recording:
+                    seconds_recording = (datetime.now() - start_recording_time).total_seconds()
+                    print('recording started')
+                    if (seconds_recording > 4):
+                        recording = False
+                print('recording stopped')
+
                 # Reset last detection timestamp
                 last_detection_time = datetime.now()
                 
@@ -129,38 +144,46 @@ def detectObject():
                         if args.debug:
                             print(category.label)
 
-                    # Save the image           
-                    if args.save:
-                        filename = 'motion-{}.jpg'.format(datetime.now().strftime("%m%d%Y%H%M%S"))
-                        cv2.imwrite(filename, video_frame)
-                        cv2.waitKey(0)
+                    timestamp = format(datetime.now().strftime("%m%d%Y%H%M%S"))
+
+                    # Write frames to video file
+                    out = cv2.VideoWriter('motion-%s.mp4' % timestamp, cv2.VideoWriter_fourcc('H','2','6','4'), 15, (1280,720))
+                    for frame in reversed(video_frames):
+                        print('frame write')
+                        out.write(frame)
+                    out.release()
+                    
+                    video_file = open('motion-%s.mp4' % timestamp, "rb")
 
                     # Send notification
                     if args.slack_token and args.slack_channel:
-                        return_key, encoded_image = cv2.imencode(".jpg", video_frame)
+                        return_key, encoded_image = cv2.imencode(".jpg", video_frames[0])
                         if not return_key:
                             continue
                         try:
                             post_file_to_slack(
                                 'Object detected',
                                 args,
-                                'motion-{}.jpg'.format(datetime.now().strftime("%m%d%Y%H%M%S")),
-                                bytearray(encoded_image))
+                                'motion-%s.mp4' % timestamp,
+                                video_file)
                             print(f"Successfully posted notification to Slack")
 
                         except Exception as e:
                             print(f"Failed to post a notification message: {e}" )
                             continue
+                    
+                    if not args.save:
+                        os.remove('motion-%s.mp4' % timestamp)
 
 
 def encodeFrames():
     encode_thread_lock = threading.Lock()
     while True:
         with encode_thread_lock:
-            global video_frame
-            if video_frame is None:
+            global video_frames
+            if video_frames[0] is None:
                 continue
-            return_key, encoded_image = cv2.imencode(".jpg", video_frame)
+            return_key, encoded_image = cv2.imencode(".jpg", video_frames[0])
             if not return_key:
                 continue
 
@@ -194,14 +217,14 @@ if __name__ == '__main__':
         print("\n** Object Detection: DISABLED **")
 
     try:
-        process_thread = threading.Thread(target=captureFrames)
-        process_thread.daemon = True
-        process_thread.start()
+        capture_thread = threading.Thread(target=captureFrames)
+        capture_thread.daemon = True
+        capture_thread.start()
 
         if not args.disable_detection:
-            detect_thread = threading.Thread(target=detectObject)
-            detect_thread.daemon = True
-            detect_thread.start()
+            detection_thread = threading.Thread(target=detectObject)
+            detection_thread.daemon = True
+            detection_thread.start()
 
         app.run("0.0.0.0", port=args.port)
         
