@@ -5,6 +5,8 @@ from notifications import post_message_to_slack
 from notifications import post_file_to_slack
 from object_detector import ObjectDetector
 from object_detector import ObjectDetectorOptions
+from image_classifier import ImageClassifier
+from image_classifier import ImageClassifierOptions
 import utils
 import os
 import time
@@ -26,6 +28,7 @@ parser.add_argument("--port", help="Web Port", default=8000, type=int)
 parser.add_argument("--save", help="Archive detected objects", action="store_true")
 
 parser.add_argument('--model', help='Path of the object detection model.', required=False, default='efficientdet_lite0.tflite')
+parser.add_argument('--classification-model', help='Path of the image classification model.', required=False, default='lite-model_aiy_vision_classifier_birds_V1_3.tflite')
 parser.add_argument('--cameraId', help='Id of camera.', required=False, type=int, default=0)
 parser.add_argument('--frameWidth', help='Width of frame to capture from camera.', required=False, type=int, default=1280)
 parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, type=int, default=720)
@@ -122,38 +125,61 @@ def detectObject():
         if (seconds_since_notified > args.detection_delay):
 
             if len(detections) > 0:
+                detection_frame = video_frames[0]
                 recording = True
                 start_recording_time = datetime.now()
-                
+                timestamp = format(datetime.now().strftime("%m%d%Y%H%M%S"))
+
                 while recording:
                     seconds_recording = (datetime.now() - start_recording_time).total_seconds()
-                    print('recording started')
                     if (seconds_recording > 4):
                         recording = False
-                print('recording stopped')
 
                 # Reset last detection timestamp
                 last_detection_time = datetime.now()
+
+
+
+                # Initialize classification model
+                options = ImageClassifierOptions(
+                    num_threads=args.numThreads,
+                    max_results=10)
+                classifier = ImageClassifier(args.classification_model, options)
+
+                # Crop detection frame for classification
+                detection_frame = utils.cropDetection(detection_frame, detections[0])
+                # Resize to 244px
+                detection_frame = utils.resize(detection_frame)
+
+                # Classify detected_frame
+                categories = classifier.classify(detection_frame)
+
+                # Show classification results on the image
+                for idx, category in enumerate(categories):
+                    class_name = category.label
+                    
+                    score = round(category.score, 2)
+                    result_text = class_name + ' (' + str(score) + ')'
+                    print(result_text)
+                    text_location = (24, (idx + 2) * 20)
+                    cv2.putText(detection_frame, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,1, (0, 0, 255), 1)
+
+                
                 
                 # Iterate detections
                 for detection in detections:
 
-                    # Get all labels/categories
-                    categories = detection.categories
-                    for category in categories:
-                        if args.debug:
-                            print(category.label)
-
-                    timestamp = format(datetime.now().strftime("%m%d%Y%H%M%S"))
+                    # Capture label
+                    detection_label = detection.categories[0].label
+                    
+                    # Save detection frame to jpg file
+                    cv2.imwrite('motion-%s.jpg' % timestamp, detection_frame)
 
                     # Write frames to video file
                     out = cv2.VideoWriter('motion-%s.mp4' % timestamp, cv2.VideoWriter_fourcc('H','2','6','4'), 15, (1280,720))
                     for frame in reversed(video_frames):
-                        print('frame write')
                         out.write(frame)
                     out.release()
-                    
-                    video_file = open('motion-%s.mp4' % timestamp, "rb")
 
                     # Send notification
                     if args.slack_token and args.slack_channel:
@@ -161,19 +187,31 @@ def detectObject():
                         if not return_key:
                             continue
                         try:
+                            video_file = open('motion-%s.mp4' % timestamp, "rb")
+                            image_file = open('motion-%s.jpg' % timestamp, "rb")
+
                             post_file_to_slack(
-                                'Object detected',
+                                '%s detected' % detection_label,
+                                args,
+                                'motion-%s.jpg' % timestamp,
+                                image_file)
+                            print(f"Successfully posted image to Slack")
+
+                            post_file_to_slack(
+                                '%s detected' % detection_label,
                                 args,
                                 'motion-%s.mp4' % timestamp,
                                 video_file)
-                            print(f"Successfully posted notification to Slack")
+                            print(f"Successfully posted video to Slack")
 
                         except Exception as e:
                             print(f"Failed to post a notification message: {e}" )
                             continue
                     
+                    # Remove capture files if not configured to save
                     if not args.save:
                         os.remove('motion-%s.mp4' % timestamp)
+                        os.remove('motion-%s.jpg' % timestamp)
 
 
 def encodeFrames():

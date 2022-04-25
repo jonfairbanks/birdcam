@@ -56,3 +56,28 @@ def visualize(
                 _FONT_SIZE, _TEXT_COLOR, _FONT_THICKNESS)
 
   return image
+
+def cropDetection(
+    image: np.ndarray,
+    detection: Detection,
+) -> np.ndarray:
+
+  w = detection.bounding_box.right - detection.bounding_box.left
+  h = detection.bounding_box.bottom - detection.bounding_box.top
+  y = detection.bounding_box.top
+  x = detection.bounding_box.left
+  image = image[y: y + max(h, w), x: x + max(h, w)]
+
+  return image
+
+def resize(
+  image: np.ndarray,
+) -> np.ndarray:
+
+  height, width, layers = image.shape
+  ratio = max(height / 244, width / 244)
+  new_h = int(height / ratio)
+  new_w = int(width / ratio)
+  image = cv2.resize(image, (new_w, new_h))
+
+  return image

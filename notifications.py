@@ -1,9 +1,9 @@
 import requests
 import json
 
-slack_channel = '#jetson-camera'
+slack_channel = '#birdcam'
 slack_icon_url = 'https://i.pinimg.com/originals/fa/2e/58/fa2e583668a7d0ec15f4fa1bcb20975d.jpg'
-slack_user_name = 'Jetson Cam'
+slack_user_name = 'Bird Cam'
 
 def post_message_to_slack(text, args, blocks = None):
     return requests.post('https://slack.com/api/chat.postMessage', {
