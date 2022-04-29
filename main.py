@@ -45,7 +45,7 @@ last_detection_time = datetime.now()
 video_capture = cv2.VideoCapture(args.cameraId)
 video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, args.frameWidth)
 video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, args.frameHeight)
-video_capture.set(cv2.CAP_PROP_FPS, 15)
+video_capture.set(cv2.CAP_PROP_FPS, 25)
 #video_capture.set(cv2.CAP_PROP_AUTO_EXPOSURE, .75) # Disable auto exposure
 #video_capture.set(cv2.CAP_PROP_EXPOSURE, 30) # Set exposure
 
@@ -90,7 +90,7 @@ def captureFrames():
             video_frames.insert(0,frame.copy())
 
             # Truncate frames (insert + truncate probably needs to be improved)
-            video_frames = video_frames[0:90]
+            video_frames = video_frames[0:125]
 
     # release video stream        
     video_capture.release()
@@ -103,7 +103,7 @@ def detectObject():
     # Initialize the object detection model
     options = ObjectDetectorOptions(
         num_threads=args.numThreads,
-        score_threshold=0.6,
+        score_threshold=0.7,
         max_results=10,
         label_allow_list=["bird","person"])
     detector = ObjectDetector(model_path=args.model, options=options)
@@ -132,7 +132,7 @@ def detectObject():
 
                 while recording:
                     seconds_recording = (datetime.now() - start_recording_time).total_seconds()
-                    if (seconds_recording > 4):
+                    if (seconds_recording > 5):
                         recording = False
 
                 # Reset last detection timestamp
@@ -176,7 +176,7 @@ def detectObject():
                     cv2.imwrite('motion-%s.jpg' % timestamp, detection_frame)
 
                     # Write frames to video file
-                    out = cv2.VideoWriter('motion-%s.mp4' % timestamp, cv2.VideoWriter_fourcc('H','2','6','4'), 15, (1280,720))
+                    out = cv2.VideoWriter('motion-%s.mp4' % timestamp, cv2.VideoWriter_fourcc('H','2','6','4'), 25, (1280,720))
                     for frame in reversed(video_frames):
                         out.write(frame)
                     out.release()
