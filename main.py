@@ -12,7 +12,6 @@ import os
 import time
 import threading
 from flask import Response, Flask, send_from_directory
-import imageio
 
 __version__ = "1.0.0"
 
