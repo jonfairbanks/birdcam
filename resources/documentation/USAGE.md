@@ -4,6 +4,12 @@ Install prerequisites:
 
 `pip3 install -r requirements.txt`
 
+Enable CSI camera support via raspi-config
+`raspi-config`
+ - select 'interface options'
+ - select 'csi camera'
+ - Enable
+
 
 Basic start-up:
 

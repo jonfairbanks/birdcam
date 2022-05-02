@@ -33,6 +33,7 @@ parser.add_argument('--frameWidth', help='Width of frame to capture from camera.
 parser.add_argument('--frameHeight', help='Height of frame to capture from camera.', required=False, type=int, default=720)
 parser.add_argument('--numThreads', help='Number of CPU threads to run the model.', required=False, type=int, default=1)
 parser.add_argument('--flipFrame', help='Flip orientation of camera', required=False, type=int, default=0)
+parser.add_argument('--savePath', help='Path to save photos and video recordings of detections', required=False, default='_saved_content/')
 
 # Global variable definitions
 args = parser.parse_args() 
@@ -168,10 +169,10 @@ def detectObject():
                     detection_label = detection.categories[0].label
                     
                     # Save detection frame to jpg file
-                    cv2.imwrite('motion-%s.jpg' % timestamp, detection_frame)
+                    cv2.imwrite(args.savePath + 'motion-%s.jpg' % timestamp, detection_frame)
 
                     # Write frames to video file
-                    out = cv2.VideoWriter('motion-%s.mp4' % timestamp, cv2.VideoWriter_fourcc('H','2','6','4'), 25, (1280,720))
+                    out = cv2.VideoWriter(args.savePath + 'motion-%s.mp4' % timestamp, cv2.VideoWriter_fourcc('H','2','6','4'), 25, (1280,720))
                     for frame in reversed(video_frames):
                         out.write(frame)
                     out.release()
@@ -182,20 +183,20 @@ def detectObject():
                         if not return_key:
                             continue
                         try:
-                            video_file = open('motion-%s.mp4' % timestamp, "rb")
-                            image_file = open('motion-%s.jpg' % timestamp, "rb")
+                            video_file = open(args.savePath + 'motion-%s.mp4' % timestamp, "rb")
+                            image_file = open(args.savePath + 'motion-%s.jpg' % timestamp, "rb")
 
                             post_file_to_slack(
                                 '%s detected' % detection_label,
                                 args,
-                                'motion-%s.jpg' % timestamp,
+                                args.savePath + 'motion-%s.jpg' % timestamp,
                                 image_file)
                             print(f"Successfully posted image to Slack")
 
                             post_file_to_slack(
                                 '%s detected' % detection_label,
                                 args,
-                                'motion-%s.mp4' % timestamp,
+                                args.savePath + 'motion-%s.mp4' % timestamp,
                                 video_file)
                             print(f"Successfully posted video to Slack")
 
@@ -205,8 +206,8 @@ def detectObject():
                     
                     # Remove capture files if not configured to save
                     if not args.save:
-                        os.remove('motion-%s.mp4' % timestamp)
-                        os.remove('motion-%s.jpg' % timestamp)
+                        os.remove(args.savePath + 'motion-%s.mp4' % timestamp)
+                        os.remove(args.savePath + 'motion-%s.jpg' % timestamp)
 
 
 def encodeFrames():
@@ -233,6 +234,12 @@ def streamFrames():
 
 
 if __name__ == '__main__':
+
+    # Create Save folder if it doesn't exist
+    SAVE_FOLDER_EXISTS = os.path.isdir(args.savePath)
+    if not SAVE_FOLDER_EXISTS:
+        os.makedirs(args.savePath)
+
     if args.version:
         print(f"Version: {__version__}")
 
