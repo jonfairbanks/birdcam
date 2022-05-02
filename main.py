@@ -35,6 +35,7 @@ parser.add_argument('--numThreads', help='Number of CPU threads to run the model
 parser.add_argument('--flipFrame', help='Flip orientation of camera', required=False, type=int, default=0)
 parser.add_argument('--savePath', help='Path to save photos and video recordings of detections', required=False, default='_saved_content/')
 parser.add_argument('--enableClassification', help='Enable secondary processing to classify detected object', action="store_true")
+parser.add_argument('--objects-to-detect', nargs='+', default=["person"])
 
 # Global variable definitions
 args = parser.parse_args() 
@@ -106,7 +107,7 @@ def detectObject():
         num_threads=args.numThreads,
         score_threshold=0.7,
         max_results=10,
-        label_allow_list=["bird","person"])
+        label_allow_list=args.objects_to_detect)
     detector = ObjectDetector(model_path=args.model, options=options)
 
     while True:
