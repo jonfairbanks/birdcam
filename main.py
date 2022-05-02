@@ -34,6 +34,7 @@ parser.add_argument('--frameHeight', help='Height of frame to capture from camer
 parser.add_argument('--numThreads', help='Number of CPU threads to run the model.', required=False, type=int, default=1)
 parser.add_argument('--flipFrame', help='Flip orientation of camera', required=False, type=int, default=0)
 parser.add_argument('--savePath', help='Path to save photos and video recordings of detections', required=False, default='_saved_content/')
+parser.add_argument('--enableClassification', help='Enable secondary processing to classify detected object', action="store_true")
 
 # Global variable definitions
 args = parser.parse_args() 
@@ -138,29 +139,30 @@ def detectObject():
                 # Reset last detection timestamp
                 last_detection_time = datetime.now()
 
-                # Initialize classification model
-                options = ImageClassifierOptions(
-                    num_threads=args.numThreads,
-                    max_results=10)
-                classifier = ImageClassifier(args.classification_model, options)
+                if(args.enableClassification):
+                    # Initialize classification model
+                    options = ImageClassifierOptions(
+                        num_threads=args.numThreads,
+                        max_results=10)
+                    classifier = ImageClassifier(args.classification_model, options)
 
-                # Crop detection frame for classification
-                detection_frame = utils.cropDetection(detection_frame, detections[0])
-                # Resize to 244px
-                detection_frame = utils.resize(detection_frame)
+                    # Crop detection frame for classification
+                    detection_frame = utils.cropDetection(detection_frame, detections[0])
+                    # Resize to 244px
+                    detection_frame = utils.resize(detection_frame)
 
-                # Classify detected_frame
-                categories = classifier.classify(detection_frame)
+                    # Classify detected_frame
+                    categories = classifier.classify(detection_frame)
 
-                # Show classification results on the image
-                for idx, category in enumerate(categories):
-                    class_name = category.label
-                    
-                    score = round(category.score, 2)
-                    result_text = class_name + ' (' + str(score) + ')'
-                    print(result_text)
-                    text_location = (24, (idx + 2) * 20)
-                    cv2.putText(detection_frame, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,1, (0, 0, 255), 1)
+                    # Show classification results on the image
+                    for idx, category in enumerate(categories):
+                        class_name = category.label
+                        
+                        score = round(category.score, 2)
+                        result_text = class_name + ' (' + str(score) + ')'
+                        print(result_text)
+                        text_location = (24, (idx + 2) * 20)
+                        cv2.putText(detection_frame, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,1, (0, 0, 255), 1)
 
                 # Iterate detections
                 for detection in detections:
