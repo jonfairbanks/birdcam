@@ -137,8 +137,6 @@ def detectObject():
                 # Reset last detection timestamp
                 last_detection_time = datetime.now()
 
-
-
                 # Initialize classification model
                 options = ImageClassifierOptions(
                     num_threads=args.numThreads,
@@ -163,8 +161,6 @@ def detectObject():
                     text_location = (24, (idx + 2) * 20)
                     cv2.putText(detection_frame, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,1, (0, 0, 255), 1)
 
-                
-                
                 # Iterate detections
                 for detection in detections:
 
@@ -230,10 +226,6 @@ def encodeFrames():
 @app.route('/')  
 def index():  
     return send_from_directory(app.static_folder, 'index.html')
-
-#@app.route('/<path:filename>')  
-#def send_file(filename):  
-#    return send_from_directory(app.static_folder, filename)
 
 @app.route("/live")
 def streamFrames():
